@@ -88,20 +88,41 @@ const htmlPlugin = () => {
         date.getSeconds();
 
       // CSSファイルにパラメータを追加（httpsから始まる外部リンクは除外）
-      let setParamHtml = html.replace(
-        /(?=.*<link)(?=.*css)(?!.*https).*$/gm,
-        (match) => {
-          return match.replace(/\.css/, ".css?" + param);
-        }
-      );
+      let setParamHtml = html
+        .replace(
+          // crossorigin属性を削除
+          /<link\s+([^>]*)\s+crossorigin(="[^"]*")?/g,
+          (match, attrs) => {
+            return `<link ${attrs.trim()}`; // crossorigin属性を削除
+          }
+        )
+        .replace(
+          // ./assets/css/配下のCSSまたはSCSSにmedia="all"を追加
+          /<link\s+([^>]*href="\.\/assets\/css\/[^"]*\.(css|scss)"[^>]*)>/g,
+          (match, attrs) => {
+            // media="all" を追加
+            if (!attrs.includes('media="all"')) {
+              return `<link ${attrs} media="all">`;
+            }
+            return match;
+          }
+        )
+        // コメントアウトされたPHPタグを有効化
+        .replace(
+          /<!--\s*(<\?php[\s\S]*?\?>)\s*-->/g,
+          (match, phpCode) => phpCode.trim() //コメントタグを除去
+        );
+
+      return setParamHtml;
 
       // JSファイルにパラメータを追加して変更内容を返す（httpsから始まる外部リンクは除外）
-      return setParamHtml.replace(
-        /(?=.*<script)(?=.*js)(?!.*https).*$/gm,
-        (match) => {
-          return match.replace(/\.js/, ".js?" + param);
-        }
-      );
+      // return setParamHtml.replace(
+      //   /(?=.*<script)(?=.*js)(?!.*https).*$/gm,
+      //   (match) => {
+      //     // return match.replace(/\.js/, ".js?" + param);
+      //     return match.replace(/\.js/, ".js");
+      //   }
+      // );
     },
   };
 };
@@ -134,8 +155,8 @@ export default defineConfig({
           console.log(fileType);
 
           if (fileType === "scss") {
-            if (id.includes("reset.scss")) return `reset.css`;
-            if (id.includes("common.scss")) return `common.css`;
+            if (id.includes("reset.scss")) return `reset.min.css`;
+            if (id.includes("common.scss")) return `common.min.css`;
             if (id.includes("style.scss")) return `style.css`;
           }
         },
@@ -147,12 +168,15 @@ export default defineConfig({
             extType = "fonts";
           }
           if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(extType)) {
-            extType = "images";
+            extType = "img";
           }
           //CSSを圧縮して書き出し
           // if (extType === "css") {
           //   return `assets/css/style.css`;
           // }
+          if (extType === "min") {
+            return `assets/css/[name][extname]`;
+          }
           return `assets/${extType}/[name][extname]`;
         },
         //jsファイルの名前を固定する際は、[name]の箇所を書き換える
@@ -171,6 +195,7 @@ export default defineConfig({
         return pageData[pagePath];
       },
     }),
+    htmlPlugin(),
     createHtmlPlugin({
       minify: false, //HTMLコード改行なし：true
     }),
